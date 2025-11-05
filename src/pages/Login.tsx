@@ -7,41 +7,112 @@ import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+
+import { useEffect } from "react";
+
+// Input sanitization helper function
+const sanitizeInput = (input: string): string => {
+  return input
+    .trim()
+    .replace(/[<>'"&]/g, "")
+    .substring(0, 100);
+};
 
 const Login = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const role = searchParams.get("role") || "staff";
   const { toast } = useToast();
-  
+  const { login, signup, isLoading } = useAuth();
+
+  const [tab, setTab] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [signupEmail, setSignupEmail] = useState("");
+  const [signupPassword, setSignupPassword] = useState("");
+  const [error, setError] = useState("");
+  // Using isLoading from useAuth; no local loading state
 
-  const handleLogin = (e: React.FormEvent) => {
+  useEffect(() => {
+    const storedUser = localStorage.getItem("syllabox_user");
+    if (storedUser) {
+      try {
+        const user = JSON.parse(storedUser);
+        navigate(`/dashboard/${user.role}`);
+      } catch {
+        localStorage.removeItem("syllabox_user");
+      }
+    }
+  }, [navigate]);
+
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Demo login validation
-    if (!email || !password) {
-      toast({
-        title: "Error",
-        description: "Please fill in all fields",
-        variant: "destructive"
-      });
+    setError("");
+
+    const emailSan = sanitizeInput(email);
+    const passSan = sanitizeInput(password);
+
+    if (!emailSan || !passSan) {
+      setError("Please fill in all fields");
       return;
     }
 
-    toast({
-      title: "Success",
-      description: `Logged in as ${role}`,
-    });
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(emailSan)) {
+      setError("Please enter a valid email address");
+      return;
+    }
 
-    // Navigate based on role
-    if (role === "staff") {
-      navigate("/dashboard/staff");
-    } else if (role === "admin") {
-      navigate("/dashboard/admin");
-    } else {
-      navigate("/dashboard/student");
+    if (passSan.length < 8) {
+      setError("Password must be at least 8 characters long");
+      return;
+    }
+
+    const ok = await login(emailSan, passSan);
+    if (!ok) {
+      setError("Invalid email or password");
+    }
+  };
+
+  const handleSignup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+
+    const emailSan = sanitizeInput(signupEmail);
+    const passSan = sanitizeInput(signupPassword);
+
+    if (!emailSan || !passSan) {
+      setError("Please fill in all fields");
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(emailSan)) {
+      setError("Please enter a valid email address");
+      return;
+    }
+
+    if (passSan.length < 8) {
+      setError("Password must be at least 8 characters long");
+      return;
+    }
+
+    const hasUpperCase = /[A-Z]/.test(passSan);
+    const hasLowerCase = /[a-z]/.test(passSan);
+    const hasNumbers = /\d/.test(passSan);
+    const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(passSan);
+
+    if (!hasUpperCase || !hasLowerCase || !hasNumbers || !hasSpecialChar) {
+      setError("Password must contain uppercase, lowercase, number, and special character");
+      return;
+    }
+
+    const ok = await signup(emailSan, passSan, "student");
+    if (ok) {
+      setTab("login");
+      setSignupEmail("");
+      setSignupPassword("");
     }
   };
 
@@ -72,7 +143,7 @@ const Login = () => {
           </div>
 
           <div className="p-6">
-            <Tabs defaultValue="login" className="w-full">
+            <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)} className="w-full">
               <TabsList className="grid w-full grid-cols-2 mb-6">
                 <TabsTrigger value="login">Login</TabsTrigger>
                 <TabsTrigger value="signup">Sign Up</TabsTrigger>
@@ -104,33 +175,30 @@ const Login = () => {
                     />
                   </div>
 
+                  {error && (
+                    <p className="text-sm text-red-600">{error}</p>
+                  )}
+
                   <Button
                     type="submit"
+                    disabled={isLoading}
                     className="w-full bg-gradient-to-r from-primary to-accent hover:opacity-90 transition-opacity"
                   >
-                    Sign In
+                    {isLoading ? "Signing In..." : "Sign In"}
                   </Button>
                 </form>
               </TabsContent>
 
               <TabsContent value="signup">
-                <form onSubmit={handleLogin} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-name">Full Name</Label>
-                    <Input
-                      id="signup-name"
-                      type="text"
-                      placeholder="John Doe"
-                      className="bg-white/50"
-                    />
-                  </div>
-
+                <form onSubmit={handleSignup} className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="signup-email">Email</Label>
                     <Input
                       id="signup-email"
                       type="email"
                       placeholder="your.email@institution.edu"
+                      value={signupEmail}
+                      onChange={(e) => setSignupEmail(e.target.value)}
                       className="bg-white/50"
                     />
                   </div>
@@ -141,15 +209,22 @@ const Login = () => {
                       id="signup-password"
                       type="password"
                       placeholder="••••••••"
+                      value={signupPassword}
+                      onChange={(e) => setSignupPassword(e.target.value)}
                       className="bg-white/50"
                     />
                   </div>
 
+                  {error && (
+                    <p className="text-sm text-red-600">{error}</p>
+                  )}
+
                   <Button
                     type="submit"
+                    disabled={isLoading}
                     className="w-full bg-gradient-to-r from-primary to-accent hover:opacity-90 transition-opacity"
                   >
-                    Create Account
+                    {isLoading ? "Creating Account..." : "Create Account"}
                   </Button>
                 </form>
               </TabsContent>

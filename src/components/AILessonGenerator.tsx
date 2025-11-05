@@ -20,27 +20,61 @@ const AILessonGenerator = ({ onBack }: AILessonGeneratorProps) => {
   const [objectives, setObjectives] = useState("");
   const [generatedContent, setGeneratedContent] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const handleGenerate = async () => {
-    if (!subject || !grade || !topic) {
+  const sanitizeInput = (input: string): string => {
+    return input
+      .trim()
+      .replace(/[<>"'&]/g, "")
+      .replace(/javascript:/gi, "")
+      .replace(/on\w+=/gi, "")
+      .substring(0, 500);
+  };
+
+  const validateInput = (value: string, fieldName: string): string | null => {
+    if (!value.trim()) return `${fieldName} is required`;
+    if (value.length < 2) return `${fieldName} must be at least 2 characters long`;
+    if (value.length > 200) return `${fieldName} must be less than 200 characters`;
+    const dangerousPatterns = /<script|javascript:|on\w+=/gi;
+    if (dangerousPatterns.test(value)) return `Invalid characters detected in ${fieldName}`;
+    return null;
+  };
+
+  const handleGenerate = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+
+    setErrors({});
+
+    const s = sanitizeInput(subject);
+    const t = sanitizeInput(topic);
+    const o = sanitizeInput(objectives);
+
+    const newErrors: Record<string, string> = {};
+    const subjErr = validateInput(s, "Subject");
+    if (subjErr) newErrors.subject = subjErr;
+    const topicErr = validateInput(t, "Topic");
+    if (topicErr) newErrors.topic = topicErr;
+    if (!grade) newErrors.grade = "Grade level is required";
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
       toast({
-        title: "Missing Information",
-        description: "Please fill in all required fields",
-        variant: "destructive"
+        title: "Validation Error",
+        description: "Please fix the errors in the form",
+        variant: "destructive",
       });
       return;
     }
 
     setIsGenerating(true);
-    
-    // Simulate AI generation
-    setTimeout(() => {
-      setGeneratedContent(`# ${subject} Lesson Plan - Grade ${grade}
 
-## Topic: ${topic}
+    setTimeout(() => {
+      setGeneratedContent(`# ${s} Lesson Plan - Grade ${grade}
+
+## Topic: ${t}
 
 ### Learning Objectives
-${objectives || "Students will understand the core concepts of " + topic}
+${o || "Students will understand the core concepts of " + t}
 
 ### Introduction (10 minutes)
 - Begin with a real-world example related to ${topic}
@@ -121,11 +155,14 @@ ${objectives || "Students will understand the core concepts of " + topic}
               <Label htmlFor="subject">Subject *</Label>
               <Input
                 id="subject"
+                name="subject"
                 placeholder="e.g., Mathematics, Physics, English"
+                maxLength={200}
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
-                className="bg-white/50"
+                className={`bg-white/50 ${errors.subject ? "border-red-500" : ""}`}
               />
+              {errors.subject && <p className="text-sm text-red-500">{errors.subject}</p>}
             </div>
 
             <div>
@@ -144,27 +181,33 @@ ${objectives || "Students will understand the core concepts of " + topic}
                   <SelectItem value="12">Grade 12</SelectItem>
                 </SelectContent>
               </Select>
+              {errors.grade && <p className="text-sm text-red-500">{errors.grade}</p>}
             </div>
 
             <div>
               <Label htmlFor="topic">Topic/Chapter *</Label>
               <Input
                 id="topic"
+                name="topic"
                 placeholder="e.g., Quadratic Equations, Newton's Laws"
+                maxLength={200}
                 value={topic}
                 onChange={(e) => setTopic(e.target.value)}
-                className="bg-white/50"
+                className={`bg-white/50 ${errors.topic ? "border-red-500" : ""}`}
               />
+              {errors.topic && <p className="text-sm text-red-500">{errors.topic}</p>}
             </div>
 
             <div>
               <Label htmlFor="objectives">Learning Objectives (Optional)</Label>
               <Textarea
                 id="objectives"
+                name="objectives"
                 placeholder="Enter specific learning objectives..."
                 value={objectives}
                 onChange={(e) => setObjectives(e.target.value)}
                 className="bg-white/50 min-h-[100px]"
+                maxLength={500}
               />
             </div>
 

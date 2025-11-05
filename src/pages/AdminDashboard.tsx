@@ -26,6 +26,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
+import { useEffect } from "react";
+import { getStaff, getLeaveRequests, getAnalyticsData, initializeSampleData } from "@/lib/localStorage";
 
 interface LeaveRequest {
   id: string;
@@ -45,18 +47,48 @@ interface Staff {
 
 const AdminDashboard = () => {
   const { toast } = useToast();
-  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([
-    { id: "1", staffName: "Dr. Sarah Johnson", dates: "May 15-17, 2024", reason: "Medical", status: "pending" },
-    { id: "2", staffName: "Prof. Michael Chen", dates: "May 20-22, 2024", reason: "Conference", status: "pending" },
-    { id: "3", staffName: "Dr. Emily White", dates: "May 10-12, 2024", reason: "Personal", status: "approved" },
-  ]);
+  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
+  const [staffList, setStaffList] = useState<Staff[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [analytics, setAnalytics] = useState({
+    totalStaff: 0,
+    activeStaff: 0,
+    totalLessons: 0,
+    pendingLeaveRequests: 0,
+    averageWorkload: 0,
+    departmentDistribution: {} as Record<string, number>,
+  });
 
-  const [staffList] = useState<Staff[]>([
-    { id: "1", name: "Dr. Sarah Johnson", role: "Senior Professor", workload: 85, status: "active" },
-    { id: "2", name: "Prof. Michael Chen", role: "Associate Professor", workload: 72, status: "active" },
-    { id: "3", name: "Dr. Emily White", role: "Assistant Professor", workload: 65, status: "on-leave" },
-    { id: "4", name: "Dr. James Brown", role: "Lecturer", workload: 90, status: "active" },
-  ]);
+  useEffect(() => {
+    const load = async () => {
+      try {
+        initializeSampleData();
+        const staffData = getStaff();
+        const leaveData = getLeaveRequests() as any;
+        const a = getAnalyticsData();
+        setStaffList(staffData.map((s: any) => ({
+          id: s.id,
+          name: s.name,
+          role: s.role,
+          workload: s.workload,
+          status: s.status === "on_leave" ? "on-leave" : (s.status as any),
+        })));
+        setLeaveRequests(
+          (leaveData || []).map((r: any) => ({
+            id: r.id,
+            staffName: r.submittedBy || "Unknown",
+            dates: `${r.startDate} - ${r.endDate}`,
+            reason: r.reason,
+            status: r.status,
+          }))
+        );
+        setAnalytics(a);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
 
   const handleLeaveAction = (id: string, action: "approved" | "rejected") => {
     setLeaveRequests(prev => 
@@ -87,8 +119,8 @@ const AdminDashboard = () => {
               <Users className="h-4 w-4 text-primary" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">24</div>
-              <p className="text-xs text-muted-foreground">4 on leave</p>
+              <div className="text-2xl font-bold">{analytics.totalStaff}</div>
+              <p className="text-xs text-muted-foreground">{analytics.activeStaff} active</p>
             </CardContent>
           </Card>
 
@@ -98,7 +130,7 @@ const AdminDashboard = () => {
               <GraduationCap className="h-4 w-4 text-accent" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">486</div>
+              <div className="text-2xl font-bold">{Math.max(analytics.totalStaff * 20, 100)}</div>
               <p className="text-xs text-muted-foreground">+12 this month</p>
             </CardContent>
           </Card>
@@ -109,9 +141,7 @@ const AdminDashboard = () => {
               <Clock className="h-4 w-4 text-orange-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">
-                {leaveRequests.filter(r => r.status === "pending").length}
-              </div>
+              <div className="text-2xl font-bold">{analytics.pendingLeaveRequests}</div>
               <p className="text-xs text-muted-foreground">Leave applications</p>
             </CardContent>
           </Card>
@@ -122,7 +152,7 @@ const AdminDashboard = () => {
               <TrendingUp className="h-4 w-4 text-green-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">234</div>
+              <div className="text-2xl font-bold">{analytics.totalLessons}</div>
               <p className="text-xs text-muted-foreground">This week</p>
             </CardContent>
           </Card>

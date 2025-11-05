@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { 
@@ -17,11 +17,28 @@ import WeeklyPlanner from "@/components/WeeklyPlanner";
 import AssessmentDesigner from "@/components/AssessmentDesigner";
 import LeaveManagement from "@/components/LeaveManagement";
 import AnalyticsDashboard from "@/components/AnalyticsDashboard";
+import { getLessons } from "@/lib/localStorage";
 
 type ViewType = "overview" | "lesson" | "planner" | "assessment" | "leave" | "analytics";
 
 const StaffDashboard = () => {
   const [currentView, setCurrentView] = useState<ViewType>("overview");
+  const [lessons, setLessons] = useState<any[]>([]);
+  const [lessonLoading, setLessonLoading] = useState(true);
+
+  useEffect(() => {
+    const loadLessons = async () => {
+      try {
+        const lessonsData = getLessons();
+        setLessons(lessonsData);
+      } catch (error) {
+        console.error("Error loading lessons:", error);
+      } finally {
+        setLessonLoading(false);
+      }
+    };
+    loadLessons();
+  }, []);
 
   const quickActions = [
     {
@@ -87,6 +104,32 @@ const StaffDashboard = () => {
                     Your AI-powered teaching assistant is ready to help you create amazing content.
                   </p>
                 </div>
+
+            {/* Recent Lessons */}
+            <Card className="glass-card border-0">
+              <div className="p-6">
+                <h3 className="text-lg font-semibold mb-4">Recent Lessons</h3>
+                <div className="space-y-3">
+                  {lessonLoading ? (
+                    <div className="flex items-center justify-center h-20">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>
+                    </div>
+                  ) : (
+                    lessons.slice(0, 3).map((lesson: any) => (
+                      <div key={lesson.id} className="flex items-center space-x-3 p-3 border rounded-lg">
+                        <FileText className="h-4 w-4 text-muted-foreground" />
+                        <div className="flex-1">
+                          <p className="font-medium">{lesson.subject} - {lesson.topic}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {lesson.gradeLevel} • {new Date(lesson.createdAt).toLocaleDateString()}
+                          </p>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </Card>
                 <Button
                   onClick={() => setCurrentView("analytics")}
                   variant="outline"

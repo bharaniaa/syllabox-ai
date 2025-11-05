@@ -16,22 +16,101 @@ const LeaveManagement = ({ onBack }: LeaveManagementProps) => {
   const { toast } = useToast();
   const [date, setDate] = useState<Date | undefined>(new Date());
   const [reason, setReason] = useState("");
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const handleSubmit = () => {
-    if (!date || !reason) {
-      toast({
-        title: "Missing Information",
-        description: "Please select a date and provide a reason",
-        variant: "destructive"
-      });
+  const sanitizeInput = (input: string): string => {
+    return input
+      .trim()
+      .replace(/[<>"'&]/g, "")
+      .replace(/javascript:/gi, "")
+      .replace(/on\w+=/gi, "")
+      .substring(0, 1000);
+  };
+
+  const validateLeaveRequest = (data: { reason: string; startDate?: string; endDate?: string }) => {
+    const errs: Record<string, string> = {};
+    if (!data.reason?.trim()) {
+      errs.reason = "Leave reason is required";
+    } else if (data.reason.length < 10) {
+      errs.reason = "Please provide a more detailed reason (at least 10 characters)";
+    } else if (data.reason.length > 500) {
+      errs.reason = "Reason must be less than 500 characters";
+    }
+
+    if (!data.startDate) {
+      errs.startDate = "Start date is required";
+    } else {
+      const start = new Date(data.startDate);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (start < today) {
+        errs.startDate = "Start date cannot be in the past";
+      }
+    }
+
+    if (!data.endDate) {
+      errs.endDate = "End date is required";
+    } else if (data.startDate) {
+      const start = new Date(data.startDate);
+      const end = new Date(data.endDate);
+      if (end < start) {
+        errs.endDate = "End date must be after start date";
+      }
+    }
+
+    const dangerousPatterns = /<script|javascript:|onclick|onerror|onload/gi;
+    if (dangerousPatterns.test(data.reason || "")) {
+      errs.reason = "Invalid characters detected in reason";
+    }
+
+    return errs;
+  };
+
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+
+    const raw = {
+      reason,
+      startDate: date ? date.toISOString().slice(0, 10) : undefined,
+      endDate: date ? date.toISOString().slice(0, 10) : undefined,
+      type: "general",
+    };
+
+    const sanitized = {
+      ...raw,
+      reason: sanitizeInput(raw.reason),
+    };
+
+    const v = validateLeaveRequest(sanitized);
+    setErrors(v);
+    if (Object.keys(v).length > 0) {
+      Object.values(v).forEach((msg) =>
+        toast({ title: "Validation Error", description: msg, variant: "destructive" })
+      );
       return;
     }
 
-    toast({
-      title: "Leave Request Submitted",
-      description: "AI is automatically adjusting your schedule and finding substitutes",
-    });
-    setReason("");
+    try {
+      const leaveRequest = {
+        ...sanitized,
+        status: "pending",
+        submittedAt: new Date().toISOString(),
+        id: Date.now(),
+      };
+
+      const existing = JSON.parse(localStorage.getItem("leave_requests") || "[]");
+      existing.push(leaveRequest);
+      localStorage.setItem("leave_requests", JSON.stringify(existing));
+
+      toast({
+        title: "Leave Request Submitted",
+        description: "Your leave request has been submitted for approval",
+      });
+
+      setReason("");
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to submit leave request", variant: "destructive" });
+    }
   };
 
   const leaveHistory = [
@@ -74,12 +153,14 @@ const LeaveManagement = ({ onBack }: LeaveManagementProps) => {
               <Label htmlFor="reason">Reason for Leave</Label>
               <Textarea
                 id="reason"
+                name="reason"
                 placeholder="Please provide a reason for your leave request..."
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
                 className="bg-white/50 mt-2"
                 rows={4}
               />
+              {errors.reason && <p className="text-sm text-red-500 mt-1">{errors.reason}</p>}
             </div>
 
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">

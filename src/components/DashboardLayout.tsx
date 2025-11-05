@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { ReactNode, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { 
@@ -14,6 +14,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useAuth } from "@/hooks/useAuth";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -22,9 +23,15 @@ interface DashboardLayoutProps {
 
 const DashboardLayout = ({ children, role }: DashboardLayoutProps) => {
   const navigate = useNavigate();
+  const { logout } = useAuth();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  const toggleMobileMenu = () => {
+    setIsMobileMenuOpen((v) => !v);
+  };
 
   const handleLogout = () => {
-    navigate("/");
+    logout();
   };
 
   return (
@@ -34,7 +41,7 @@ const DashboardLayout = ({ children, role }: DashboardLayoutProps) => {
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <Button variant="ghost" size="icon" className="md:hidden">
+              <Button variant="ghost" size="icon" className="md:hidden" onClick={toggleMobileMenu}>
                 <Menu className="h-5 w-5" />
               </Button>
               <div>
@@ -73,6 +80,14 @@ const DashboardLayout = ({ children, role }: DashboardLayoutProps) => {
       </header>
 
       {/* Main Content */}
+      {/* Mobile Navigation */}
+      <div className={`md:hidden ${isMobileMenuOpen ? "block" : "hidden"}`}>
+        <nav className="flex flex-col space-y-2 p-4">
+          {/* Placeholder for mobile navigation items */}
+          <Button variant="ghost" onClick={() => setIsMobileMenuOpen(false)}>Close Menu</Button>
+        </nav>
+      </div>
+
       <main className="container mx-auto px-4 py-8">
         {children}
       </main>
