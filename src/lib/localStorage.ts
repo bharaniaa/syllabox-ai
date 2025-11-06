@@ -1,251 +1,273 @@
-export interface User {
-  id: string;
-  email: string;
-  role: "admin" | "staff" | "student";
-  name: string;
-  createdAt: string;
-}
+// Local Multi-Tier Database with Complete Data Isolation
+// Each user type can only access their designated data tier
 
-export interface Lesson {
-  id: string;
-  subject: string;
-  topic: string;
-  objectives: string;
-  gradeLevel: string;
-  content: any;
-  createdBy: string;
-  createdAt: string;
-  institutionId?: string;
-}
+import { 
+  User, 
+  UserType, 
+  AdminSystemData, 
+  StaffEducationalData, 
+  StudentProgressData, 
+  AuditLog, 
+  DatabaseConfig 
+} from '../types/user';
 
-export interface Assessment {
-  id: string;
-  title: string;
-  course: string;
-  questions: number;
-  difficulty: string;
-  type: string;
-  createdBy: string;
-  createdAt: string;
-}
+export class LocalMultiTierDatabase {
+  private config: DatabaseConfig;
+  private storagePrefix: string;
 
-export interface LeaveRequest {
-  id: string;
-  reason: string;
-  startDate: string;
-  endDate: string;
-  type: string;
-  status: "pending" | "approved" | "rejected";
-  submittedBy: string;
-  submittedAt: string;
-}
-
-export interface WeeklyPlan {
-  id: string;
-  staffId: string;
-  week: string;
-  classes: Array<{
-    id: string;
-    subject: string;
-    grade: string;
-    time: string;
-    room: string;
-    topic: string;
-  }>;
-  createdAt: string;
-}
-
-export interface Staff {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-  status: "active" | "on_leave" | "inactive";
-  workload: number;
-  department: string;
-  lastActive: string;
-}
-
-const STORAGE_KEYS = {
-  USERS: "syllabox_users",
-  LESSONS: "syllabox_lessons",
-  ASSESSMENTS: "syllabox_assessments",
-  LEAVE_REQUESTS: "syllabox_leave_requests",
-  WEEKLY_PLANS: "syllabox_weekly_plans",
-  STAFF: "syllabox_staff",
-  CURRENT_USER: "syllabox_current_user",
-};
-
-const getStorageData = <T,>(key: string): T[] => {
-  try {
-    const data = localStorage.getItem(key);
-    return data ? JSON.parse(data) : [];
-  } catch (error) {
-    console.error(`Error reading from localStorage (${key}):`, error);
-    return [];
-  }
-};
-
-const setStorageData = <T,>(key: string, data: T[]): void => {
-  try {
-    localStorage.setItem(key, JSON.stringify(data));
-  } catch (error) {
-    console.error(`Error writing to localStorage (${key}):`, error);
-  }
-};
-
-const generateId = (): string => {
-  return Date.now().toString(36) + Math.random().toString(36).substr(2);
-};
-
-export const initializeSampleData = (): void => {
-  if (getStorageData<Staff>(STORAGE_KEYS.STAFF).length === 0) {
-    const sampleStaff: Staff[] = [
-      {
-        id: "1",
-        name: "Dr. Sarah Johnson",
-        email: "sarah.johnson@school.edu",
-        role: "Mathematics Teacher",
-        status: "active",
-        workload: 85,
-        department: "Mathematics",
-        lastActive: "2025-11-05T10:30:00Z",
-      },
-      {
-        id: "2",
-        name: "Mr. Michael Chen",
-        email: "michael.chen@school.edu",
-        role: "Science Teacher",
-        status: "active",
-        workload: 92,
-        department: "Science",
-        lastActive: "2025-11-05T11:15:00Z",
-      },
-      {
-        id: "3",
-        name: "Ms. Emily Rodriguez",
-        email: "emily.rodriguez@school.edu",
-        role: "English Teacher",
-        status: "on_leave",
-        workload: 0,
-        department: "English",
-        lastActive: "2025-11-01T14:20:00Z",
-      },
-    ];
-    setStorageData(STORAGE_KEYS.STAFF, sampleStaff);
+  constructor(config: DatabaseConfig) {
+    this.config = config;
+    this.storagePrefix = `syllabox_${config.userType}_${config.userId}`;
+    this.initializeData();
   }
 
-  if (getStorageData<Lesson>(STORAGE_KEYS.LESSONS).length === 0) {
-    const sampleLessons: Lesson[] = [
-      {
-        id: "1",
-        subject: "Mathematics",
-        topic: "Algebraic Expressions",
-        objectives: "Understand variables and constants. Solve simple algebraic equations.",
-        gradeLevel: "Grade 8",
-        content: { title: "Algebraic Expressions - Grade 8" },
-        createdBy: "Dr. Sarah Johnson",
-        createdAt: "2025-11-01T09:00:00Z",
-      },
-      {
-        id: "2",
-        subject: "Science",
-        topic: "Photosynthesis",
-        objectives: "Understand the process of photosynthesis. Identify factors affecting plant growth.",
-        gradeLevel: "Grade 7",
-        content: { title: "Photosynthesis - Grade 7" },
-        createdBy: "Mr. Michael Chen",
-        createdAt: "2025-11-02T14:30:00Z",
-      },
-    ];
-    setStorageData(STORAGE_KEYS.LESSONS, sampleLessons);
+  // Admin Operations (Admin only)
+  getSystemData(): AdminSystemData {
+    if (this.config.userType !== 'admin') {
+      throw new Error('Access denied: Admin data only');
+    }
+    
+    const data = localStorage.getItem(`${this.storagePrefix}_system_data`);
+    return data ? JSON.parse(data) : this.getDefaultSystemData();
   }
-};
 
-export const getStaff = (): Staff[] => {
-  return getStorageData<Staff>(STORAGE_KEYS.STAFF);
-};
-
-export const addStaff = (staff: Omit<Staff, "id">): Staff => {
-  const staffList = getStorageData<Staff>(STORAGE_KEYS.STAFF);
-  const newStaff: Staff = {
-    ...staff,
-    id: generateId(),
-  };
-  staffList.push(newStaff);
-  setStorageData(STORAGE_KEYS.STAFF, staffList);
-  return newStaff;
-};
-
-export const getLessons = (): Lesson[] => {
-  return getStorageData<Lesson>(STORAGE_KEYS.LESSONS);
-};
-
-export const addLesson = (lesson: Omit<Lesson, "id">): Lesson => {
-  const lessons = getStorageData<Lesson>(STORAGE_KEYS.LESSONS);
-  const newLesson: Lesson = {
-    ...lesson,
-    id: generateId(),
-  };
-  lessons.push(newLesson);
-  setStorageData(STORAGE_KEYS.LESSONS, lessons);
-  return newLesson;
-};
-
-export const getAssessments = (): Assessment[] => {
-  return getStorageData<Assessment>(STORAGE_KEYS.ASSESSMENTS);
-};
-
-export const addAssessment = (assessment: Omit<Assessment, "id">): Assessment => {
-  const assessments = getStorageData<Assessment>(STORAGE_KEYS.ASSESSMENTS);
-  const newAssessment: Assessment = {
-    ...assessment,
-    id: generateId(),
-  };
-  assessments.push(newAssessment);
-  setStorageData(STORAGE_KEYS.ASSESSMENTS, assessments);
-  return newAssessment;
-};
-
-export const getLeaveRequests = (): LeaveRequest[] => {
-  return getStorageData<LeaveRequest>(STORAGE_KEYS.LEAVE_REQUESTS);
-};
-
-export const addLeaveRequest = (request: Omit<LeaveRequest, "id" | "status">): LeaveRequest => {
-  const requests = getStorageData<LeaveRequest>(STORAGE_KEYS.LEAVE_REQUESTS);
-  const newRequest: LeaveRequest = {
-    ...request,
-    id: generateId(),
-    status: "pending",
-  };
-  requests.push(newRequest);
-  setStorageData(STORAGE_KEYS.LEAVE_REQUESTS, requests);
-  return newRequest;
-};
-
-export const updateLeaveRequestStatus = (id: string, status: "approved" | "rejected"): void => {
-  const requests = getStorageData<LeaveRequest>(STORAGE_KEYS.LEAVE_REQUESTS);
-  const requestIndex = requests.findIndex((req) => req.id === id);
-  if (requestIndex !== -1) {
-    requests[requestIndex].status = status;
-    setStorageData(STORAGE_KEYS.LEAVE_REQUESTS, requests);
+  saveSystemData(data: AdminSystemData): void {
+    if (this.config.userType !== 'admin') {
+      throw new Error('Access denied: Admin data only');
+    }
+    
+    localStorage.setItem(`${this.storagePrefix}_system_data`, JSON.stringify(data));
+    this.logAction('SYSTEM_DATA_UPDATED', 'admin_system', { dataKeys: Object.keys(data) });
   }
-};
 
-export const getAnalyticsData = () => {
-  const staff = getStaff();
-  const lessons = getLessons();
-  const leaveRequests = getLeaveRequests();
+  // Staff Operations (Staff only)
+  getEducationalData(): StaffEducationalData {
+    if (this.config.userType !== 'staff') {
+      throw new Error('Access denied: Staff data only');
+    }
+    
+    const data = localStorage.getItem(`${this.storagePrefix}_educational_data`);
+    return data ? JSON.parse(data) : this.getDefaultEducationalData();
+  }
 
-  return {
-    totalStaff: staff.length,
-    activeStaff: staff.filter((s) => s.status === "active").length,
-    totalLessons: lessons.length,
-    pendingLeaveRequests: leaveRequests.filter((req) => req.status === "pending").length,
-    averageWorkload: staff.reduce((sum, s) => sum + s.workload, 0) / (staff.length || 1),
-    departmentDistribution: staff.reduce((acc, s) => {
-      (acc as any)[s.department] = ((acc as any)[s.department] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>),
-  };
-};
+  saveEducationalData(data: StaffEducationalData): void {
+    if (this.config.userType !== 'staff') {
+      throw new Error('Access denied: Staff data only');
+    }
+    
+    localStorage.setItem(`${this.storagePrefix}_educational_data`, JSON.stringify(data));
+    this.logAction('EDUCATIONAL_DATA_UPDATED', 'staff_educational', { 
+      lessons: data.lessonsCreated,
+      quizzes: data.quizzesCreated 
+    });
+  }
+
+  // Student Operations (Student only)
+  getProgressData(): StudentProgressData {
+    if (this.config.userType !== 'student') {
+      throw new Error('Access denied: Student data only');
+    }
+    
+    const data = localStorage.getItem(`${this.storagePrefix}_progress_data`);
+    return data ? JSON.parse(data) : this.getDefaultProgressData();
+  }
+
+  saveProgressData(data: StudentProgressData): void {
+    if (this.config.userType !== 'student') {
+      throw new Error('Access denied: Student data only');
+    }
+    
+    localStorage.setItem(`${this.storagePrefix}_progress_data`, JSON.stringify(data));
+    this.logAction('PROGRESS_DATA_UPDATED', 'student_progress', { 
+      courses: data.coursesEnrolled.length,
+      quizScores: data.quizScores.length 
+    });
+  }
+
+  // Cross-tier operations (Admin only)
+  getAllUsers(): User[] {
+    if (this.config.userType !== 'admin') {
+      throw new Error('Access denied: User management admin only');
+    }
+    
+    const allUsersData = localStorage.getItem('syllabox_all_users');
+    return allUsersData ? JSON.parse(allUsersData) : [];
+  }
+
+  saveUser(user: User): void {
+    if (this.config.userType !== 'admin') {
+      throw new Error('Access denied: User management admin only');
+    }
+    
+    const allUsers = this.getAllUsers();
+    const existingIndex = allUsers.findIndex(u => u.id === user.id);
+    
+    if (existingIndex >= 0) {
+      allUsers[existingIndex] = user;
+    } else {
+      allUsers.push(user);
+    }
+    
+    localStorage.setItem('syllabox_all_users', JSON.stringify(allUsers));
+    this.logAction('USER_SAVED', 'user_management', { 
+      userId: user.id, 
+      userType: user.userType,
+      action: existingIndex >= 0 ? 'updated' : 'created'
+    });
+  }
+
+  // Quiz operations
+  getQuizzes(): any[] {
+    if (this.config.userType !== 'staff' && this.config.userType !== 'admin') {
+      throw new Error('Access denied: Quiz access restricted');
+    }
+    
+    const quizzes = localStorage.getItem('syllabox_quizzes');
+    return quizzes ? JSON.parse(quizzes) : [];
+  }
+
+  getStudentQuizzes(): any[] {
+    if (this.config.userType !== 'student') {
+      throw new Error('Access denied: Student quiz access only');
+    }
+    
+    const quizzes = this.getQuizzes();
+    return quizzes.filter(quiz => quiz.status === 'published');
+  }
+
+  // Audit logging
+  logAction(action: string, resource: string, details: Record<string, any> = {}): void {
+    const auditLog: AuditLog = {
+      id: this.generateId(),
+      userId: this.config.userId,
+      userType: this.config.userType,
+      action,
+      resource,
+      details,
+      timestamp: new Date().toISOString(),
+      ipAddress: '127.0.0.1', // Local development
+      userAgent: navigator.userAgent
+    };
+    
+    const logs = this.getAuditLogs();
+    logs.push(auditLog);
+    
+    // Keep only last 100 logs
+    if (logs.length > 100) {
+      logs.splice(0, logs.length - 100);
+    }
+    
+    localStorage.setItem('syllabox_audit_logs', JSON.stringify(logs));
+  }
+
+  getAuditLogs(): AuditLog[] {
+    const logs = localStorage.getItem('syllabox_audit_logs');
+    return logs ? JSON.parse(logs) : [];
+  }
+
+  // Utility methods
+  private generateId(): string {
+    return `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  private initializeData(): void {
+    // Initialize default data if not exists
+    if (this.config.userType === 'admin') {
+      const existing = localStorage.getItem(`${this.storagePrefix}_system_data`);
+      if (!existing) {
+        this.saveSystemData(this.getDefaultSystemData());
+      }
+    } else if (this.config.userType === 'staff') {
+      const existing = localStorage.getItem(`${this.storagePrefix}_educational_data`);
+      if (!existing) {
+        this.saveEducationalData(this.getDefaultEducationalData());
+      }
+    } else if (this.config.userType === 'student') {
+      const existing = localStorage.getItem(`${this.storagePrefix}_progress_data`);
+      if (!existing) {
+        this.saveProgressData(this.getDefaultProgressData());
+      }
+    }
+  }
+
+  private getDefaultSystemData(): AdminSystemData {
+    return {
+      totalUsers: 0,
+      activeUsers: 0,
+      systemHealth: 'healthy',
+      lastBackup: new Date().toISOString(),
+      featureFlags: {
+        enableAdvancedAnalytics: true,
+        enableBulkOperations: true,
+        enableSystemMonitoring: true
+      },
+      auditSettings: {
+        logLevel: 'info',
+        retentionDays: 30
+      }
+    };
+  }
+
+  private getDefaultEducationalData(): StaffEducationalData {
+    return {
+      id: this.generateId(),
+      userId: this.config.userId,
+      lessonsCreated: 0,
+      quizzesCreated: 0,
+      assessmentsCreated: 0,
+      coursesOwned: [],
+      studentsManaged: [],
+      lessonPlans: [],
+      quizBank: [],
+      lastActivity: new Date().toISOString()
+    };
+  }
+
+  private getDefaultProgressData(): StudentProgressData {
+    return {
+      id: this.generateId(),
+      userId: this.config.userId,
+      coursesEnrolled: [],
+      quizScores: [],
+      assignmentsCompleted: 0,
+      totalStudyTime: 0,
+      currentStreak: 0,
+      achievements: [],
+      learningPath: [],
+      lastActivity: new Date().toISOString()
+    };
+  }
+
+  // Data isolation verification
+  verifyDataIsolation(): boolean {
+    try {
+      // Test that user can only access their own data tier
+      if (this.config.userType === 'admin') {
+        this.getSystemData(); // Should work
+        this.getEducationalData(); // Should fail
+        this.getProgressData(); // Should fail
+      } else if (this.config.userType === 'staff') {
+        this.getEducationalData(); // Should work
+        this.getSystemData(); // Should fail
+        this.getProgressData(); // Should fail
+      } else if (this.config.userType === 'student') {
+        this.getProgressData(); // Should work
+        this.getSystemData(); // Should fail
+        this.getEducationalData(); // Should fail
+      }
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  // Clear all data (for testing)
+  clearAllData(): void {
+    const keys = Object.keys(localStorage);
+    keys.forEach(key => {
+      if (key.startsWith('syllabox_')) {
+        localStorage.removeItem(key);
+      }
+    });
+  }
+}

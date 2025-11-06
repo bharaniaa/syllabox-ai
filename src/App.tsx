@@ -1,67 +1,78 @@
-import { useEffect } from "react";
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Landing from "./pages/Landing";
-import Login from "./pages/Login";
-import StaffDashboard from "./pages/StaffDashboard";
-import AdminDashboard from "./pages/AdminDashboard";
-import StudentDashboard from "./pages/StudentDashboard";
-import NotFound from "./pages/NotFound";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { initializeSampleData } from "@/lib/localStorage";
+// src/App.tsx
+import React, { useEffect, useState } from 'react';
+import LoginForm from './components/AuthLoginForm';
+import { UserTypeBadge } from './components/UserTypeSelector';
+import { UserTypeService } from './lib/userTypeService';
+import { User } from './types/user';
+import { LocalMultiTierDatabase } from './lib/localStorage';
 
-const queryClient = new QueryClient();
+function App() {
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [database, setDatabase] = useState<LocalMultiTierDatabase | null>(null);
+  const [loading, setLoading] = useState(true);
 
-const App = () => {
   useEffect(() => {
-    initializeSampleData();
+    const user = UserTypeService.getCurrentUser();
+    if (user) {
+      const db = new LocalMultiTierDatabase({
+        userType: user.userType,
+        userId: user.id,
+        sessionId: 'current'
+      });
+      setCurrentUser(user);
+      setDatabase(db);
+    }
+    setLoading(false);
   }, []);
 
+  const handleLoginSuccess = (user: User, userDatabase: LocalMultiTierDatabase) => {
+    setCurrentUser(user);
+    setDatabase(userDatabase);
+  };
+
+  const handleLogout = () => {
+    UserTypeService.logout();
+    setCurrentUser(null);
+    setDatabase(null);
+  };
+
+  if (loading) {
+    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  }
+
+  if (!currentUser || !database) {
+    return <LoginForm onLoginSuccess={handleLoginSuccess} />;
+  }
+
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
-          <Route path="/" element={<Landing />} />
-          <Route path="/login" element={<Login />} />
+    <div className="min-h-screen bg-gray-50">
+      <header className="bg-white shadow">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center py-6">
+            <div className="flex items-center">
+              <h1 className="text-3xl font-bold text-gray-900">Syllabox AI</h1>
+              <div className="ml-4">
+                <UserTypeBadge userType={currentUser.userType} />
+              </div>
+            </div>
+            <div className="flex items-center space-x-4">
+              <span className="text-gray-700">Welcome, {currentUser.name}</span>
+              <button onClick={handleLogout} className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-md text-sm font-medium">
+                Logout
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
 
-          <Route
-            path="/dashboard/admin"
-            element={
-              <ProtectedRoute allowedRoles={["admin"]}>
-                <AdminDashboard />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/dashboard/staff"
-            element={
-              <ProtectedRoute allowedRoles={["staff"]}>
-                <StaffDashboard />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/dashboard/student"
-            element={
-              <ProtectedRoute allowedRoles={["student"]}>
-                <StudentDashboard />
-              </ProtectedRoute>
-            }
-          />
-
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </TooltipProvider>
-    </QueryClientProvider>
+      <main className="max-w-7xl mx-auto p-6">
+        <div className="bg-white p-6 rounded-lg shadow">
+          <h2 className="text-xl font-semibold mb-2">Dashboard</h2>
+          <p className="text-gray-700">You are logged in as <span className="font-medium">{currentUser.userType}</span>.</p>
+        </div>
+      </main>
+    </div>
   );
-};
+}
 
 export default App;
