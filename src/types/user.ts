@@ -83,6 +83,47 @@ export interface StudentProgressData {
   lastActivity: string;
 }
 
+// Class Management System Interfaces
+export interface Class {
+  id: string;
+  name: string;
+  subject: string;
+  teacherId: string;
+  teacherName: string;
+  description: string;
+  createdAt: string;
+  isActive: boolean;
+  students: Array<{
+    id: string;
+    name: string;
+    email: string;
+    enrolledAt: string;
+  }>;
+}
+
+export interface StudentEnrollment {
+  id: string;
+  classId: string;
+  studentId: string;
+  studentEmail: string;
+  studentName: string;
+  teacherId: string;
+  enrolledAt: string;
+  status: 'active' | 'inactive';
+}
+
+export interface ClassContent {
+  id: string;
+  classId: string;
+  teacherId: string;
+  type: 'lesson' | 'quiz' | 'assignment';
+  title: string;
+  content: string;
+  publishedAt: string;
+  dueDate?: string;
+  status: 'draft' | 'published';
+}
+
 export interface AuditLog {
   id: string;
   userId: string;
