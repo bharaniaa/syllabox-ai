@@ -192,6 +192,21 @@ export const addLesson = (lesson: Omit<Lesson, "id">): Lesson => {
   return newLesson;
 };
 
+export const getAssessments = (): Assessment[] => {
+  return getStorageData<Assessment>(STORAGE_KEYS.ASSESSMENTS);
+};
+
+export const addAssessment = (assessment: Omit<Assessment, "id">): Assessment => {
+  const assessments = getStorageData<Assessment>(STORAGE_KEYS.ASSESSMENTS);
+  const newAssessment: Assessment = {
+    ...assessment,
+    id: generateId(),
+  };
+  assessments.push(newAssessment);
+  setStorageData(STORAGE_KEYS.ASSESSMENTS, assessments);
+  return newAssessment;
+};
+
 export const getLeaveRequests = (): LeaveRequest[] => {
   return getStorageData<LeaveRequest>(STORAGE_KEYS.LEAVE_REQUESTS);
 };

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,6 +7,9 @@ import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowLeft, Sparkles, Download, Copy } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { aiService, LessonRequest } from "@/lib/aiService";
+import { addLesson } from "@/lib/localStorage";
+import { useAuth } from "@/hooks/useAuth";
 
 interface AILessonGeneratorProps {
   onBack: () => void;
@@ -14,6 +17,7 @@ interface AILessonGeneratorProps {
 
 const AILessonGenerator = ({ onBack }: AILessonGeneratorProps) => {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [subject, setSubject] = useState("");
   const [grade, setGrade] = useState("");
   const [topic, setTopic] = useState("");
@@ -21,6 +25,8 @@ const AILessonGenerator = ({ onBack }: AILessonGeneratorProps) => {
   const [generatedContent, setGeneratedContent] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [connectionStatus, setConnectionStatus] = useState<"testing" | "connected" | "failed">("testing");
 
   const sanitizeInput = (input: string): string => {
     return input
@@ -40,10 +46,73 @@ const AILessonGenerator = ({ onBack }: AILessonGeneratorProps) => {
     return null;
   };
 
+  useEffect(() => {
+    const testConnection = async () => {
+      try {
+        const isConnected = await aiService.testConnection();
+        setConnectionStatus(isConnected ? "connected" : "failed");
+      } catch (error) {
+        setConnectionStatus("failed");
+      }
+    };
+    testConnection();
+  }, []);
+
+  const generateMockLesson = (request: LessonRequest) => {
+    return {
+      title: `${request.subject} - ${request.topic}`,
+      gradeLevel: request.gradeLevel,
+      duration: request.duration || "45 minutes",
+      objectives: request.objectives
+        ? request.objectives.split("\n").filter((o) => o.trim())
+        : [
+            `Understand key concepts of ${request.topic}`,
+            `Apply ${request.subject} knowledge to problems`,
+            `Demonstrate learning through practice`,
+          ],
+      materials: ["Whiteboard", "Handouts", "Projector"],
+      sections: [
+        {
+          title: "Introduction",
+          duration: "10 minutes",
+          activities: [
+            `Hook with real-world example of ${request.topic}`,
+            "Present learning objectives",
+            "Activate prior knowledge",
+          ],
+        },
+        {
+          title: "Main Content",
+          duration: "25 minutes",
+          activities: [
+            `Explain core ideas about ${request.topic}`,
+            "Guided practice",
+            "Independent practice",
+          ],
+        },
+        {
+          title: "Conclusion",
+          duration: "10 minutes",
+          activities: [
+            "Summarize key points",
+            "Exit ticket",
+            "Assign homework",
+          ],
+        },
+      ],
+      assessment: {
+        formative: ["Questioning", "Observation", "Exit ticket"],
+        summative: ["Quiz", "Assignment"],
+      },
+      extensions: ["Challenge problems", "Real-world project"],
+    };
+  };
+
   const handleGenerate = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
 
     setErrors({});
+    setAiError(null);
 
     const s = sanitizeInput(subject);
     const t = sanitizeInput(topic);
@@ -66,64 +135,67 @@ const AILessonGenerator = ({ onBack }: AILessonGeneratorProps) => {
       return;
     }
 
-    setIsGenerating(true);
+    try {
+      setIsGenerating(true);
+      setGeneratedContent("");
 
-    setTimeout(() => {
-      setGeneratedContent(`# ${s} Lesson Plan - Grade ${grade}
+      if (connectionStatus === "failed") {
+        toast({
+          title: "AI Connection Issue",
+          description: "Unable to connect to AI service. Using fallback mode.",
+          variant: "destructive",
+        });
+      }
 
-## Topic: ${t}
+      const lessonRequest: LessonRequest = {
+        subject: s,
+        topic: t,
+        objectives: o,
+        gradeLevel: `Grade ${grade}`,
+        duration: "45 minutes",
+      };
 
-### Learning Objectives
-${o || "Students will understand the core concepts of " + t}
+      let generatedData: any;
+      try {
+        if (connectionStatus === "connected") {
+          generatedData = await aiService.generateLesson(lessonRequest);
+        } else {
+          generatedData = generateMockLesson(lessonRequest);
+        }
+      } catch (err) {
+        setAiError("AI generation temporarily unavailable. Using template.");
+        generatedData = generateMockLesson(lessonRequest);
+      }
 
-### Introduction (10 minutes)
-- Begin with a real-world example related to ${topic}
-- Ask students what they already know about the subject
-- Present the day's learning objectives
-
-### Main Content (30 minutes)
-1. **Concept Introduction**
-   - Define key terms and concepts
-   - Use visual aids and diagrams
-   - Provide concrete examples
-
-2. **Interactive Activity**
-   - Group discussion on practical applications
-   - Hands-on demonstration or experiment
-   - Problem-solving exercises
-
-3. **Reinforcement**
-   - Review main points
-   - Address student questions
-   - Connect to previous lessons
-
-### Assessment (10 minutes)
-- Quick quiz or worksheet
-- Class discussion
-- Exit ticket to gauge understanding
-
-### Homework Assignment
-- Reading: Pages related to ${topic}
-- Practice problems
-- Prepare questions for next class
-
-### Materials Needed
-- Whiteboard and markers
-- Handouts
-- Digital presentation
-- Reference materials
-
-### Notes for Teacher
-- Adjust pacing based on student comprehension
-- Have additional examples ready
-- Prepare extension activities for advanced students`);
-      
-      setIsGenerating(false);
-      toast({
-        title: "Lesson Generated!",
-        description: "Your AI-powered lesson plan is ready",
+      const saved = addLesson({
+        subject: s,
+        topic: t,
+        objectives: o,
+        gradeLevel: `Grade ${grade}`,
+        content: generatedData,
+        createdBy: user?.email || "AI Generator",
+        createdAt: new Date().toISOString(),
       });
-    }, 2000);
+
+      setGeneratedContent(JSON.stringify({ ...generatedData, id: saved.id }, null, 2));
+
+      toast({
+        title: connectionStatus === "connected" ? "AI Lesson Generated!" : "Lesson Generated",
+        description:
+          connectionStatus === "connected"
+            ? "Your AI-powered lesson plan is ready!"
+            : "Lesson created using template (AI unavailable).",
+      });
+    } catch (error) {
+      setAiError("An error occurred while generating the lesson");
+      toast({
+        title: "Generation Failed",
+        description: "An error occurred while generating the lesson",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const handleCopy = () => {
@@ -145,6 +217,41 @@ ${o || "Students will understand the core concepts of " + t}
           <h2 className="text-2xl font-bold">AI Lesson Generator</h2>
           <p className="text-muted-foreground">Create comprehensive lesson plans with AI</p>
         </div>
+      </div>
+
+      <div className="mb-6">
+        <div
+          className={`flex items-center space-x-2 text-sm ${
+            connectionStatus === "connected"
+              ? "text-green-600"
+              : connectionStatus === "failed"
+              ? "text-red-600"
+              : "text-yellow-600"
+          }`}
+        >
+          <div
+            className={`w-2 h-2 rounded-full ${
+              connectionStatus === "connected"
+                ? "bg-green-500"
+                : connectionStatus === "failed"
+                ? "bg-red-500"
+                : "bg-yellow-500"
+            }`}
+          ></div>
+          <span>
+            {connectionStatus === "connected"
+              ? "AI Connected - Generating intelligent content"
+              : connectionStatus === "failed"
+              ? "AI Offline - Using fallback templates"
+              : "Testing AI connection..."}
+          </span>
+        </div>
+
+        {aiError && (
+          <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <p className="text-sm text-yellow-800">{aiError}</p>
+          </div>
+        )}
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
